@@ -1,9 +1,22 @@
-import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, Dimensions, BackHandler } from 'react-native';
+import { useNavigation} from '@react-navigation/native';
 
 const BluetoothScreen = () => {
-  const { width, height } = Dimensions.get('window');
+  const { width } = Dimensions.get('window');
   const isMobile = width < 768;
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (navigation.isFocused()) {
+        return true;
+      }
+      return false;
+    });
+
+    return () => backHandler.remove();
+  }, [navigation]);
 
   return (
     <View style={[styles.container, { backgroundColor: 'black' }]}>
