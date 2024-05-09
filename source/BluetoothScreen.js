@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Dimensions, BackHandler } from 'react-native';
-import { useNavigation} from '@react-navigation/native';
+import { View, Text, StyleSheet, Dimensions, BackHandler, Image } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 
 const BluetoothScreen = () => {
   const { width } = Dimensions.get('window');
@@ -19,9 +19,13 @@ const BluetoothScreen = () => {
   }, [navigation]);
 
   return (
-    <View style={[styles.container, { backgroundColor: 'black' }]}>
-      <View style={styles.footer}>
-
+    <View style={styles.container}>
+      <Image
+        source={require('./Assets/topbar.png')}
+        style={{ width: width, height: isMobile ? 50 : 100, resizeMode: 'cover' }}
+      />
+      <View style={styles.content}></View>
+      <View style={[styles.footer,{ width: isMobile ? '100%' : '98%', marginLeft: isMobile ? 0 : 10 , marginRight: isMobile ? 5 : 10}]}>
       </View>
     </View>
   );
@@ -30,23 +34,21 @@ const BluetoothScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
+    backgroundColor: 'black',
+    justifyContent: 'space-between',
   },
-  title: {
-    color: 'white',
-    fontWeight: 'bold',
+  content: {
+    flex: 1,
   },
-  footer:{
+  footer: {
     paddingHorizontal: 5,
     paddingVertical: 5,
     borderRadius: 5,
-    width: '100%',
     height: '10%',
     alignItems: 'center',
     backgroundColor: '#555555',
-    marginBottom: 5
-  }
+    marginBottom: 5,
+  },
 });
 
 export default BluetoothScreen;
