@@ -20,9 +20,9 @@ const BluetoothScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: 'black' }]}>
-      <Text style={[styles.title, { fontSize: isMobile ? 24 : 36 }]}>
-        BLUETOOTH SCREEN
-      </Text>
+      <View style={styles.footer}>
+
+      </View>
     </View>
   );
 };
@@ -30,13 +30,23 @@ const BluetoothScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
   },
   title: {
     color: 'white',
     fontWeight: 'bold',
   },
+  footer:{
+    paddingHorizontal: 5,
+    paddingVertical: 5,
+    borderRadius: 5,
+    width: '100%',
+    height: '10%',
+    alignItems: 'center',
+    backgroundColor: '#555555',
+    marginBottom: 5
+  }
 });
 
 export default BluetoothScreen;
