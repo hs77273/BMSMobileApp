@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, BackHandler, Image, Switch, Platform, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, BackHandler, Image, Switch, Alert, Linking, PermissionsAndroid } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import BleManager from 'react-native-ble-manager';
 
@@ -42,17 +42,41 @@ const BluetoothScreen = () => {
   const toggleBluetooth = async (value) => {
     try {
       if (value) {
-        await BleManager.enableBluetooth();
+        const permissions = [
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        ];
+  
+        const granted = await PermissionsAndroid.requestMultiple(permissions);
+  
+        if (
+          granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED &&
+          granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
+          granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE] === PermissionsAndroid.RESULTS.GRANTED &&
+          granted[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED
+        ) {
+          await BleManager.enableBluetooth();
+        } else {
+          Alert.alert(
+            'Permission Denied',
+            'Bluetooth and Location permissions are required to enable Bluetooth.',
+            [{ text: 'OK', onPress: () => setBluetoothEnabled(false) }]
+          );
+          return;
+        }
       } else {
-        Alert.alert(
-          'Turn Off Bluetooth',
-          'Please open Settings > Connected devices > Bluetooth to turn off Bluetooth.',
-          [
-            { text: 'Cancel', onPress: () => setBluetoothEnabled(true), style: 'cancel' },
-            { text: 'Go to Settings', onPress: () => Linking.openSettings() },
-          ],
-          { cancelable: false }
-        );
+        const isBluetoothEnabled = await BleManager.checkState();
+        if (isBluetoothEnabled) {
+          Alert.alert(
+            'Turn Off Bluetooth',
+            'Turn off Bluetooth in control panel/settings.',
+            [{ text: 'OK', onPress: () => setBluetoothEnabled(false) }]
+          );
+        } else {
+          setBluetoothEnabled(false);
+        }
       }
       setBluetoothEnabled(value);
     } catch (error) {
@@ -81,6 +105,9 @@ const BluetoothScreen = () => {
           />
         </View>
       </View>
+      <View style={[styles.maincontent, ,{ width: isMobile ? '100%' : '98%', marginLeft: isMobile ? 0 : 10 , marginRight: isMobile ? 5 : 10}]}>
+
+      </View>
       <View style={[styles.footer,{ width: isMobile ? '100%' : '98%', marginLeft: isMobile ? 0 : 10 , marginRight: isMobile ? 5 : 10}]}>
       </View>
     </View>
@@ -98,8 +125,17 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 5,
     height: '10%',
-    backgroundColor: '#555555',
+    backgroundColor: '#444444',
     marginTop: 15,
+    marginBottom: 10,
+  },
+  maincontent: {
+    paddingHorizontal: 5,
+    paddingVertical: 5,
+    borderRadius: 5,
+    height: '65%',
+    backgroundColor: '#333333',
+    marginTop: 10,
     marginBottom: 10,
   },
   footer: {
@@ -108,7 +144,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     height: '10%',
     alignItems: 'center',
-    backgroundColor: '#555555',
+    backgroundColor: '#333333',
     marginBottom: 10,
     marginTop: 'auto',
     flexDirection: 'row',
