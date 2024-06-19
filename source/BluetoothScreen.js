@@ -1,22 +1,73 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, BackHandler, Image, Switch, Alert, Linking, PermissionsAndroid } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, BackHandler, Image, Switch, Button, FlatList, TouchableOpacity, PermissionsAndroid, Platform, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import BleManager from 'react-native-ble-manager';
+import { NativeEventEmitter, NativeModules } from 'react-native';
+
+const BleManagerModule = NativeModules.BleManager;
+const bleManagerEmitter = new NativeEventEmitter(BleManagerModule);
 
 const BluetoothScreen = () => {
   const { width } = Dimensions.get('window');
   const isMobile = width < 768;
   const navigation = useNavigation();
-  const [bluetoothEnabled, setBluetoothEnabled] = useState(false);
+  const [isBluetoothOn, setIsBluetoothOn] = useState(false);
+  const [devices, setDevices] = useState([]);
 
   useEffect(() => {
-    BleManager.start({ showAlert: false }).then(() => {
-      console.log('Bluetooth module initialized');
-      checkBluetoothState();
-    }).catch((error) => {
-      console.error('Error initializing Bluetooth module:', error);
-    });
+    BleManager.start({ showAlert: false });
 
+    const handleDiscoverPeripheral = (peripheral) => {
+      console.log('Discovered Peripheral', peripheral);
+      setDevices((prevDevices) => {
+        if (!prevDevices.find(device => device.id === peripheral.id)) {
+          return [...prevDevices, peripheral];
+        }
+        return prevDevices;
+      });
+    };
+
+    bleManagerEmitter.addListener('BleManagerDiscoverPeripheral', handleDiscoverPeripheral);
+
+    return () => {
+      bleManagerEmitter.removeListener('BleManagerDiscoverPeripheral', handleDiscoverPeripheral);
+    };
+  }, []);
+
+  const requestPermissions = async () => {
+    if (Platform.OS === 'android') {
+      await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      ]);
+    }
+  };
+
+  const toggleBluetooth = async () => {
+    if (isBluetoothOn) {
+      Alert.alert(
+        'Turn Off Bluetooth',
+        'Please use the device control panel to turn off Bluetooth.',
+        [
+          { text: 'OK', onPress: () => console.log('OK Pressed') }
+        ],
+        { cancelable: false }
+      );
+    } else {
+      await requestPermissions();
+      await BleManager.enableBluetooth()
+        .then(() => {
+          console.log('Bluetooth is enabled');
+          setIsBluetoothOn(true);
+        })
+        .catch((error) => {
+          console.log('The user refused to enable Bluetooth', error);
+        });
+    }
+  };
+  
+  useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       if (navigation.isFocused()) {
         return true;
@@ -24,65 +75,29 @@ const BluetoothScreen = () => {
       return false;
     });
 
-    return () => {
-      backHandler.remove();
-    };
+    return () => backHandler.remove();
   }, [navigation]);
 
-  const checkBluetoothState = async () => {
-    try {
-      const isEnabled = await BleManager.checkState();
-      setBluetoothEnabled(isEnabled === 'on');
-    } catch (error) {
-      console.error('Bluetooth Error:', error.message);
-      Alert.alert('Error', 'Failed to check Bluetooth state.');
+  const startScan = () => {
+    if (isBluetoothOn) {
+      BleManager.scan([], 5, true)
+        .then((results) => {
+          console.log('Scanning...');
+        })
+        .catch((error) => {
+          console.error(error);
+        });
     }
   };
 
-  const toggleBluetooth = async (value) => {
-    try {
-      if (value) {
-        const permissions = [
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        ];
-  
-        const granted = await PermissionsAndroid.requestMultiple(permissions);
-  
-        if (
-          granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED &&
-          granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
-          granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE] === PermissionsAndroid.RESULTS.GRANTED &&
-          granted[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED
-        ) {
-          await BleManager.enableBluetooth();
-        } else {
-          Alert.alert(
-            'Permission Denied',
-            'Bluetooth and Location permissions are required to enable Bluetooth.',
-            [{ text: 'OK', onPress: () => setBluetoothEnabled(false) }]
-          );
-          return;
-        }
-      } else {
-        const isBluetoothEnabled = await BleManager.checkState();
-        if (isBluetoothEnabled) {
-          Alert.alert(
-            'Turn Off Bluetooth',
-            'Turn off Bluetooth in control panel/settings.',
-            [{ text: 'OK', onPress: () => setBluetoothEnabled(false) }]
-          );
-        } else {
-          setBluetoothEnabled(false);
-        }
-      }
-      setBluetoothEnabled(value);
-    } catch (error) {
-      console.error('Bluetooth Error:', error.message);
-      Alert.alert('Error', 'Failed to toggle Bluetooth. Please try again.');
-    }
+  const connectToDevice = (id) => {
+    BleManager.connect(id)
+      .then(() => {
+        console.log('Connected to ' + id);
+      })
+      .catch((error) => {
+        console.error('Connection error', error);
+      });
   };
 
   return (
@@ -91,24 +106,40 @@ const BluetoothScreen = () => {
         source={require('./Assets/topbar.png')}
         style={{ width: width, height: isMobile ? 50 : 100, resizeMode: 'cover' }}
       />
-      <View style={[styles.content, { width: isMobile ? '100%' : '98%', marginLeft: isMobile ? 0 : 10 , marginRight: isMobile ? 5 : 10}]}>
+      <View style={[styles.content, { width: isMobile ? '100%' : '98%', marginLeft: isMobile ? 0 : 10, marginRight: isMobile ? 5 : 10 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Image source={require('./Assets/bluetooth.png')} style={{ width: isMobile ? 50 : 80, height: isMobile ? 50 : 80, marginRight: 8, marginTop: isMobile ? 8 : 12}} />
-          <Text style={{ color: 'white', fontSize: isMobile ? 24 : 28, marginTop: 8}}>Bluetooth</Text>
+          <Image
+            source={require('./Assets/bluetooth.png')}
+            style={{ width: isMobile ? 50 : 80, height: isMobile ? 50 : 80, marginRight: 8, marginTop: isMobile ? 8 : 12 }}
+          />
+          <Text style={{ color: 'white', fontSize: isMobile ? 24 : 28, marginTop: 8 }}>Bluetooth</Text>
           <Switch
-            trackColor={{ false: "#767577", true: "#81b0ff" }}
-            thumbColor={bluetoothEnabled ? "#4bb8f5" : "#f4f3f4"}
-            ios_backgroundColor="#3e3e3e"
+            value={isBluetoothOn}
             onValueChange={toggleBluetooth}
-            value={bluetoothEnabled}
-            style={[styles.switchStyle, {marginLeft: isMobile ? 160 : 500, transform: isMobile ? [{ scaleX: 1.2 }, { scaleY: 1.2 }] : [{ scaleX: 1.6 }, { scaleY: 1.6 }]}]}
+            color={isBluetoothOn ? '#4bb8f5' : '#f4f3f4'}
+            style={[styles.switchStyle, { marginLeft: isMobile ? 160 : 500, transform: isMobile ? [{ scaleX: 1.2 }, { scaleY: 1.2 }] : [{ scaleX: 1.6 }, { scaleY: 1.6 }] }]}
           />
         </View>
       </View>
-      <View style={[styles.maincontent, ,{ width: isMobile ? '100%' : '98%', marginLeft: isMobile ? 0 : 10 , marginRight: isMobile ? 5 : 10}]}>
-
+      <View style={[styles.maincontent, { width: isMobile ? '100%' : '98%', marginLeft: isMobile ? 0 : 10, marginRight: isMobile ? 5 : 10 }]}>
+        <Button title="Scan for Devices" onPress={startScan} disabled={!isBluetoothOn} />
+        <FlatList
+          data={devices}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 10 }}>
+              <View>
+                <Text style={{ color: 'white' }}>{item.name || 'Unnamed Device'}</Text>
+                <Text style={{ color: 'white' }}>{item.id}</Text>
+              </View>
+              <TouchableOpacity onPress={() => connectToDevice(item.id)}>
+                <Text style={{ color: 'blue' }}>Connect</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        />
       </View>
-      <View style={[styles.footer,{ width: isMobile ? '100%' : '98%', marginLeft: isMobile ? 0 : 10 , marginRight: isMobile ? 5 : 10}]}>
+      <View style={[styles.footer, { width: isMobile ? '100%' : '98%', marginLeft: isMobile ? 0 : 10, marginRight: isMobile ? 5 : 10 }]}>
       </View>
     </View>
   );
@@ -151,10 +182,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
   },
-  switchStyle:{
+  switchStyle: {
     alignSelf: 'center',
     marginTop: 10,
-  }
+  },
 });
 
 export default BluetoothScreen;
